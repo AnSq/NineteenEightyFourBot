@@ -49,8 +49,9 @@ INSERT INTO phrases (phrase) VALUES ("police state");
 INSERT INTO phrases (phrase) VALUES ("fascis");
 INSERT INTO phrases (phrase) VALUES ("Orwell");
 INSERT INTO phrases (phrase) VALUES ("Snowden");
-INSERT INTO phrases (phrase) VALUES ("NSA");
+INSERT INTO phrases (phrase) VALUES ("The NSA");
 INSERT INTO phrases (phrase) VALUES ("Illuminati");
+INSERT INTO phrases (phrase) VALUES ("Monsanto");
 
 DROP TABLE IF EXISTS comment_phrase;
 CREATE TABLE comment_phrase (
