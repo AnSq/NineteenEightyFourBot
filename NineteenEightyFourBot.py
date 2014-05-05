@@ -7,7 +7,7 @@ import time
 import sqlite3
 
 
-version = "0.4.1"
+version = "0.4.2"
 user_agent = "NineteenEightyFourBot v%s by /u/AnSq" % version
 
 
@@ -112,7 +112,7 @@ class Detector (object):
 
 	def detect(self, comment):
 		count = {False: 0, True: 0} # key is if it's quoted
-		for line in comment.body.splitlines():
+		for line in comment.body.lower().splitlines():
 			quoted = line.strip()[:4] == "&gt;"
 			start = 0
 			while start < len(line) and start != -1:
