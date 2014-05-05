@@ -7,7 +7,7 @@ import time
 import sqlite3
 
 
-version = "0.4"
+version = "0.4.1"
 user_agent = "NineteenEightyFourBot v%s by /u/AnSq" % version
 
 
@@ -18,7 +18,7 @@ def comment_id(comment):
 class DataAccessObject (object):
 	def __init__(self, dbname):
 		self.db = db = sqlite3.connect(dbname + ".sqlite")
-		self.phrase_table = dict(db.execute("SELECT phrase,id FROM phrases").fetchall())
+		self.phrase_table = dict(db.execute("SELECT lower(phrase),id FROM phrases").fetchall())
 
 		self.db.execute("PRAGMA foreign_keys = ON")
 		self.db.commit()
