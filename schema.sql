@@ -53,9 +53,12 @@ INSERT INTO phrases (phrase) VALUES ("Snowden");
 INSERT INTO phrases (phrase) VALUES ("The NSA");
 INSERT INTO phrases (phrase) VALUES ("Illuminati");
 INSERT INTO phrases (phrase) VALUES ("Monsanto");
-INSERT INTO phrases (phrase,report) VALUES ("AnSq", 0);
 INSERT INTO phrases (phrase) VALUES ("Huxley");
 INSERT INTO phrases (phrase) VALUES ("Brave New World");
+INSERT INTO phrases (phrase) VALUES ("Stasi");
+
+--It's like that gold feature, except it includes the middle of unrelated words!
+INSERT INTO phrases (phrase,report) VALUES ("AnSq", 0);
 
 DROP TABLE IF EXISTS comment_phrase;
 CREATE TABLE comment_phrase (
@@ -68,10 +71,9 @@ CREATE TABLE comment_phrase (
 
 DROP TABLE IF EXISTS subreddits;
 CREATE TABLE subreddits (
-	id           INTEGER PRIMARY KEY,
-	id_b36       TEXT,
-	display_name TEXT,
-	subscribers  INTEGER
+	display_name     TEXT PRIMARY KEY,
+	subscribers      INTEGER,
+	scanned_comments INTEGER DEFAULT 0
 );
 
 DROP VIEW IF EXISTS comments_basic;
@@ -119,14 +121,19 @@ ORDER BY per_100000 DESC;
 
 DROP VIEW IF EXISTS user_counts;
 CREATE VIEW user_counts AS
-SELECT comments.author, sum(unquoted+quoted) AS count
+SELECT comments.author, sum(unquoted+quoted) AS detections, count(*) AS comments
 FROM phrases
 JOIN comment_phrase ON phrases.id == comment_phrase.phrase
 JOIN comments ON comments.id == comment_phrase.comment
 GROUP BY comments.author
-ORDER BY count DESC;
+ORDER BY detections DESC;
 
-DROP VIEW IF EXISTS total;
-CREATE VIEW total AS
-SELECT sum(count) AS total
+DROP VIEW IF EXISTS total_detections;
+CREATE VIEW total_detections AS
+SELECT sum(count) AS total_detections
 FROM phrase_counts;
+
+DROP VIEW IF EXISTS total_scanned;
+CREATE VIEW total_scanned AS
+SELECT sum(scanned_comments) AS total_scanned
+FROM subreddits;

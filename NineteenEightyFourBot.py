@@ -8,7 +8,7 @@ import calendar
 import sqlite3
 
 
-version = "0.6"
+version = "0.7"
 user_agent = "NineteenEightyFourBot v%s by /u/AnSq" % version
 
 
@@ -19,7 +19,10 @@ def thing_id(id):
 class DataAccessObject (object):
 	def __init__(self, dbname):
 		self.db = db = sqlite3.connect(dbname + ".sqlite")
-		self.phrase_table = dict(db.execute("SELECT lower(phrase),id FROM phrases").fetchall())
+		self.phrase_table = dict(db.execute("SELECT lower(phrase), id FROM phrases").fetchall())
+
+		self._pending_requests = []
+		self._pending_data = []
 
 		self.db.execute("PRAGMA foreign_keys = ON")
 		self.db.commit()
@@ -105,13 +108,34 @@ class DataAccessObject (object):
 			count = counts[phrase]
 			if count[False] + count[True] > 0:
 				data = (c_id, self.phrase_table[phrase], count[False], count[True])
-				self.db.execute("INSERT OR REPLACE INTO comment_phrase (comment,phrase,unquoted,quoted) VALUES (?,?,?,?)", data)
-				self.db.commit()
+				self.db.execute("INSERT OR REPLACE INTO comment_phrase (comment, phrase, unquoted, quoted) VALUES (?,?,?,?)", data)
+		self.db.commit()
 
-	def insert_into_subreddits(self, subreddit):
+	def update_subreddit_comment_count(self, subreddit):
 		s = subreddit
-		data = (thing_id(s.id), s.id, s.display_name, s.subscribers)
-		self.db.execute("INSERT OR REPLACE INTO subreddits (id, id_b36, display_name, subscribers) VALUES (?,?,?,?)", data)
+
+		#this happens so often I want to save some of it up so it doesn't constantly hit the database
+
+		self._pending_requests.append("INSERT OR IGNORE INTO subreddits (display_name) VALUES (?)")
+		self._pending_data.append((s.display_name,))
+
+		self._pending_requests.append("UPDATE subreddits SET scanned_comments = scanned_comments + 1 WHERE display_name == ?")
+		self._pending_data.append((s.display_name,))
+
+	def push_pending(self):
+		assert len(self._pending_requests) == len(self._pending_data)
+
+		for i in range(0, len(self._pending_requests)):
+			self.db.execute(self._pending_requests[i], self._pending_data[i])
+		self.db.commit()
+
+		self._pending_requests = []
+		self._pending_data = []
+
+	def update_subreddit_subscribers(self, subreddit):
+		"""use with caution, this makes a network call for unfetched subreddits"""
+		s = subreddit
+		self.db.execute("UPDATE subreddits SET subscribers = ? WHERE display_name == ?", (s.subscribers, s.display_name))
 		self.db.commit()
 
 
@@ -198,6 +222,8 @@ class CommentHandler (object):
 	def __init__(self, dao):
 		self.dao = dao
 		self.detectors = DetectorMaker().get_detectors(dao.phrase_table.keys())
+		self.times_called = 0
+		self.time_pushed = time.time()
 
 	def any(self, counts):
 		"""Flattens the doubly-nested dict of counts into a
@@ -206,20 +232,39 @@ class CommentHandler (object):
 		return sum([number for outlist in [inlist.values() for inlist in counts.values()] for number in outlist]) > 0
 
 	def handle(self, comment):
+		self.times_called += 1
+
+		self.dao.update_subreddit_comment_count(comment.subreddit)
+
+		calls = self.times_called % 1000 == 0
+		t = time.time() - self.time_pushed
+		if calls or t > 10:
+			print "    push_pending",
+			if calls:
+				print "calls (%4f time)" % t,
+			if t > 10:
+				print "time (%d calls)" % (self.times_called),
+			print
+			self.dao.push_pending()
+			self.time_pushed = time.time()
+
 		counts = {}
 		for d in self.detectors:
+			#start = time.time()
 			counts[d.phrase] = d.detect(comment)
+			#print d.phrase,time.time()-start
 
 		if self.any(counts):
 			t = time.asctime(time.localtime())
-			print "%s: /u/%s in /r/%s (%d) - %s" % (t, comment.author.name, comment.subreddit.display_name, comment.subreddit.subscribers, comment.permalink)
+			print "%s: /u/%s in /r/%s - %s" % (t, comment.author.name, comment.subreddit.display_name, comment.permalink)
 			self.dao.insert_into_comments(comment)
 			self.dao.insert_comment_counts(thing_id(comment.id), counts)
-			self.dao.insert_into_subreddits(comment.subreddit)
+			self.dao.update_subreddit_subscribers(comment.subreddit)
 
 
 def main():
 	print user_agent
+	print time.asctime(time.localtime())
 	reddit = praw.Reddit(user_agent=user_agent)
 	print "Logging in...",
 	reddit.login()
@@ -230,7 +275,9 @@ def main():
 	i = 0
 	stream = praw.helpers.comment_stream(reddit, "all", verbosity=3)
 	for comment in stream:
+		#start = time.time()
 		handler.handle(comment)
+		#print round(time.time()-start,4),
 		i += 1
 
 
