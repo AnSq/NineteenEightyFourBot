@@ -4,10 +4,11 @@
 import praw
 import praw.helpers
 import time
+import calendar
 import sqlite3
 
 
-version = "0.4.2"
+version = "0.5"
 user_agent = "NineteenEightyFourBot v%s by /u/AnSq" % version
 
 
@@ -101,9 +102,10 @@ class DataAccessObject (object):
 	def insert_comment_counts(self, c_id, counts):
 		for phrase in counts:
 			count = counts[phrase]
-			data = (c_id, self.phrase_table[phrase], count[False], count[True])
-			self.db.execute("INSERT OR REPLACE INTO comment_phrase (comment,phrase,unquoted,quoted) VALUES (?,?,?,?)", data)
-			self.db.commit()
+			if count[False] + count[True] > 0:
+				data = (c_id, self.phrase_table[phrase], count[False], count[True])
+				self.db.execute("INSERT OR REPLACE INTO comment_phrase (comment,phrase,unquoted,quoted) VALUES (?,?,?,?)", data)
+				self.db.commit()
 
 
 class Detector (object):
@@ -125,13 +127,58 @@ class Detector (object):
 		return count
 
 
+class FreeYearDetector (Detector):
+	"""detects a year-like string when it doesn't have a month near it,
+	another year near it, or another number next to it"""
+
+	def __init__(self, phrase):
+		super(FreeYearDetector, self).__init__(phrase)
+		self.months = [m.lower() for m in calendar.month_name[1:] + calendar.month_abbr[1:]]
+		self.search_len = max([len(m) for m in self.months]) + 5
+
+	def search_numbers(self, line, index, radius, length):
+		start = max(index - radius, 0)
+		end = index + len(self.phrase) + radius
+		pre = line[start:index]
+		post = line[index + len(self.phrase) : end]
+		str = pre + " " + post
+		return "1"*length in "".join(["1" if c.isdigit() else "0" for c in str])
+
+	def detect(self, comment):
+		count = {False: 0, True: 0} # key is if it's quoted
+		for line in comment.body.lower().splitlines():
+			quoted = line.strip()[:4] == "&gt;"
+			start = 0
+			while start < len(line) and start != -1:
+				index = line.find(self.phrase, start)
+				if index == -1:
+					break
+				else:
+					#search for months
+					start = max(index - self.search_len, 0)
+					end = index + len(self.phrase) + self.search_len
+					found_month = any([m in line[start:end] for m in self.months])
+
+					#search for numbers
+					found_year = self.search_numbers(line, index, self.search_len, 4)
+					found_number = self.search_numbers(line, index, 2, 1)
+
+					if not found_month and not found_year and not found_number:
+						count[quoted] += 1
+					start = index + 1
+		return count
+
+
 class DetectorMaker (object):
 	def __init__(self):
 		pass
 
 	def get_detector(self, phrase):
 		# add other detectors here
-		return Detector(phrase)
+		if (phrase == "1984"):
+			return FreeYearDetector(phrase)
+		else:
+			return Detector(phrase)
 
 	def get_detectors(self, phrases):
 		detectors = []
@@ -158,7 +205,7 @@ class CommentHandler (object):
 
 		if self.any(counts):
 			t = time.asctime(time.localtime())
-			print "Found at %s: /u/%s in /r/%s - %s" % (t, comment.author.name, comment.subreddit.display_name, comment.permalink)
+			print "%s: /u/%s in /r/%s - %s" % (t, comment.author.name, comment.subreddit.display_name, comment.permalink)
 			self.dao.insert_into_comments(comment)
 			self.dao.insert_comment_counts(comment_id(comment), counts)
 

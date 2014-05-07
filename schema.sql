@@ -40,7 +40,8 @@ CREATE TABLE comments (
 DROP TABLE IF EXISTS phrases;
 CREATE TABLE phrases (
 	id     INTEGER PRIMARY KEY AUTOINCREMENT,
-	phrase TEXT UNIQUE NOT NULL
+	phrase TEXT UNIQUE NOT NULL,
+	report BOOLEAN DEFAULT 1
 );
 
 INSERT INTO phrases (phrase) VALUES ("1984");
@@ -52,6 +53,7 @@ INSERT INTO phrases (phrase) VALUES ("Snowden");
 INSERT INTO phrases (phrase) VALUES ("The NSA");
 INSERT INTO phrases (phrase) VALUES ("Illuminati");
 INSERT INTO phrases (phrase) VALUES ("Monsanto");
+INSERT INTO phrases (phrase,report) VALUES ("AnSq", 0);
 
 DROP TABLE IF EXISTS comment_phrase;
 CREATE TABLE comment_phrase (
@@ -69,7 +71,7 @@ FROM comments;
 
 DROP VIEW IF EXISTS comment_phrase_view;
 CREATE VIEW comment_phrase_view AS
-SELECT comment, author, subreddit, link_title, body, phrases.phrase, (unquoted+quoted) AS total, unquoted, quoted
+SELECT comment, author, subreddit, link_title, body, phrases.phrase, (unquoted+quoted) AS total, unquoted, quoted, permalink
 FROM comment_phrase
 JOIN phrases ON comment_phrase.phrase == phrases.id
 JOIN comments ON comments.id == comment_phrase.comment
