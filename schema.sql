@@ -54,6 +54,8 @@ INSERT INTO phrases (phrase) VALUES ("The NSA");
 INSERT INTO phrases (phrase) VALUES ("Illuminati");
 INSERT INTO phrases (phrase) VALUES ("Monsanto");
 INSERT INTO phrases (phrase,report) VALUES ("AnSq", 0);
+INSERT INTO phrases (phrase) VALUES ("Huxley");
+INSERT INTO phrases (phrase) VALUES ("Brave New World");
 
 DROP TABLE IF EXISTS comment_phrase;
 CREATE TABLE comment_phrase (
