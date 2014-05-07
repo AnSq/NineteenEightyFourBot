@@ -95,7 +95,7 @@ class DataAccessObject (object):
 				"subreddit," +
 				"subreddit_id," +
 				"ups" +
-			") VALUES (%s);" + "?," * 32 + "?);",
+			") VALUES (" + "?," * 32 + "?);",
 			data
 		)
 		self.db.commit()
