@@ -125,3 +125,8 @@ JOIN comment_phrase ON phrases.id == comment_phrase.phrase
 JOIN comments ON comments.id == comment_phrase.comment
 GROUP BY comments.author
 ORDER BY count DESC;
+
+DROP VIEW IF EXISTS total;
+CREATE VIEW total AS
+SELECT sum(count) AS total
+FROM phrase_counts;
