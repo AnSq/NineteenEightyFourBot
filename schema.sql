@@ -76,8 +76,9 @@ CREATE TABLE subreddits (
 
 DROP VIEW IF EXISTS comments_basic;
 CREATE VIEW comments_basic AS
-SELECT id,author,subreddit,link_title,body,score,ups,downs,permalink
-FROM comments;
+SELECT id, author, subreddit, link_title, body, score, ups, downs, permalink
+FROM comments
+ORDER BY id DESC;
 
 DROP VIEW IF EXISTS comment_phrase_view;
 CREATE VIEW comment_phrase_view AS
@@ -86,20 +87,21 @@ FROM comment_phrase
 JOIN phrases ON comment_phrase.phrase == phrases.id
 JOIN comments ON comments.id == comment_phrase.comment
 WHERE total != 0
-ORDER BY comment
+ORDER BY comment DESC;
 
 DROP VIEW IF EXISTS phrases_by_subreddit;
 CREATE VIEW phrases_by_subreddit AS
-SELECT phrases.phrase, comments.subreddit, count(*) AS count
+SELECT phrases.phrase, comments.subreddit, sum(unquoted+quoted) AS count, subscribers, CAST (sum(unquoted+quoted) AS FLOAT)/(CAST (subreddits.subscribers AS FLOAT)/100000) AS per_100000
 FROM phrases
 JOIN comment_phrase ON phrases.id == comment_phrase.phrase
 JOIN comments ON comment_phrase.comment == comments.id
+LEFT OUTER JOIN subreddits ON comments.subreddit == subreddits.display_name
 GROUP BY phrases.phrase, comments.subreddit
 ORDER BY count DESC;
 
 DROP VIEW IF EXISTS phrase_counts;
 CREATE VIEW phrase_counts AS
-SELECT phrases.phrase, count(*) AS count
+SELECT phrases.phrase, sum(unquoted+quoted) AS count
 FROM phrases
 JOIN comment_phrase ON phrases.id == comment_phrase.phrase
 GROUP BY phrases.phrase
@@ -107,16 +109,17 @@ ORDER BY count DESC;
 
 DROP VIEW IF EXISTS subreddit_counts;
 CREATE VIEW subreddit_counts AS
-SELECT comments.subreddit, count(*) AS count
+SELECT comments.subreddit, sum(unquoted+quoted) AS count, subscribers, CAST (sum(unquoted+quoted) AS FLOAT)/(CAST (subreddits.subscribers AS FLOAT)/100000) AS per_100000
 FROM phrases
 JOIN comment_phrase ON phrases.id == comment_phrase.phrase
 JOIN comments ON comments.id == comment_phrase.comment
+LEFT OUTER JOIN subreddits ON comments.subreddit == subreddits.display_name
 GROUP BY comments.subreddit
-ORDER BY count DESC;
+ORDER BY per_100000 DESC;
 
 DROP VIEW IF EXISTS user_counts;
 CREATE VIEW user_counts AS
-SELECT comments.author, count(*) AS count
+SELECT comments.author, sum(unquoted+quoted) AS count
 FROM phrases
 JOIN comment_phrase ON phrases.id == comment_phrase.phrase
 JOIN comments ON comments.id == comment_phrase.comment
