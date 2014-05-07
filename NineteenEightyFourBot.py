@@ -8,12 +8,12 @@ import calendar
 import sqlite3
 
 
-version = "0.5"
+version = "0.6"
 user_agent = "NineteenEightyFourBot v%s by /u/AnSq" % version
 
 
-def comment_id(comment):
-	return praw.helpers.convert_id36_to_numeric_id(comment.id)
+def thing_id(id):
+	return praw.helpers.convert_id36_to_numeric_id(id)
 
 
 class DataAccessObject (object):
@@ -26,6 +26,41 @@ class DataAccessObject (object):
 
 	def insert_into_comments(self, comment):
 		c = comment
+		data = (
+			thing_id(c.id),
+			c.__hash__(),
+			c.approved_by,
+			c.author.name,
+			c.author_flair_css_class,
+			c.author_flair_text,
+			c.banned_by,
+			c.body,
+			c.body_html,
+			c.created,
+			c.created_utc,
+			c.distinguished,
+			c.downs,
+			c.edited,
+			c.fullname,
+			c.gilded,
+			c.id,
+			c.is_root,
+			c.likes,
+			c.link_author,
+			c.link_id,
+			c.link_title,
+			c.link_url,
+			c.name,
+			c.num_reports,
+			c.parent_id,
+			c.permalink,
+			c.saved,
+			c.score,
+			c.score_hidden,
+			c.subreddit.display_name,
+			c.subreddit_id,
+			c.ups
+		)
 		self.db.execute("INSERT OR REPLACE INTO comments (" +
 				"id," +
 				"__hash__," +
@@ -60,42 +95,8 @@ class DataAccessObject (object):
 				"subreddit," +
 				"subreddit_id," +
 				"ups" +
-			") values (" + "?," * 32 + "?);",
-			(
-				comment_id(c),
-				c.__hash__(),
-				c.approved_by,
-				c.author.name,
-				c.author_flair_css_class,
-				c.author_flair_text,
-				c.banned_by,
-				c.body,
-				c.body_html,
-				c.created,
-				c.created_utc,
-				c.distinguished,
-				c.downs,
-				c.edited,
-				c.fullname,
-				c.gilded,
-				c.id,
-				c.is_root,
-				c.likes,
-				c.link_author,
-				c.link_id,
-				c.link_title,
-				c.link_url,
-				c.name,
-				c.num_reports,
-				c.parent_id,
-				c.permalink,
-				c.saved,
-				c.score,
-				c.score_hidden,
-				c.subreddit.display_name,
-				c.subreddit_id,
-				c.ups
-			)
+			") VALUES (%s);" + "?," * 32 + "?);",
+			data
 		)
 		self.db.commit()
 
@@ -106,6 +107,12 @@ class DataAccessObject (object):
 				data = (c_id, self.phrase_table[phrase], count[False], count[True])
 				self.db.execute("INSERT OR REPLACE INTO comment_phrase (comment,phrase,unquoted,quoted) VALUES (?,?,?,?)", data)
 				self.db.commit()
+
+	def insert_into_subreddits(self, subreddit):
+		s = subreddit
+		data = (thing_id(s.id), s.id, s.display_name, s.subscribers)
+		self.db.execute("INSERT OR REPLACE INTO subreddits (id, id_b36, display_name, subscribers) VALUES (?,?,?,?)", data)
+		self.db.commit()
 
 
 class Detector (object):
@@ -153,19 +160,19 @@ class FreeYearDetector (Detector):
 				index = line.find(self.phrase, start)
 				if index == -1:
 					break
-				else:
-					#search for months
-					start = max(index - self.search_len, 0)
-					end = index + len(self.phrase) + self.search_len
-					found_month = any([m in line[start:end] for m in self.months])
 
-					#search for numbers
-					found_year = self.search_numbers(line, index, self.search_len, 4)
-					found_number = self.search_numbers(line, index, 2, 1)
+				#search for months
+				start = max(index - self.search_len, 0)
+				end = index + len(self.phrase) + self.search_len
+				found_month = any([m in line[start:end] for m in self.months])
 
-					if not found_month and not found_year and not found_number:
-						count[quoted] += 1
-					start = index + 1
+				#search for numbers
+				found_year = self.search_numbers(line, index, self.search_len, 4)
+				found_number = self.search_numbers(line, index, 2, 1)
+
+				if not found_month and not found_year and not found_number:
+					count[quoted] += 1
+				start = index + 1
 		return count
 
 
@@ -205,9 +212,10 @@ class CommentHandler (object):
 
 		if self.any(counts):
 			t = time.asctime(time.localtime())
-			print "%s: /u/%s in /r/%s - %s" % (t, comment.author.name, comment.subreddit.display_name, comment.permalink)
+			print "%s: /u/%s in /r/%s (%d) - %s" % (t, comment.author.name, comment.subreddit.display_name, comment.subreddit.subscribers, comment.permalink)
 			self.dao.insert_into_comments(comment)
-			self.dao.insert_comment_counts(comment_id(comment), counts)
+			self.dao.insert_comment_counts(thing_id(comment.id), counts)
+			self.dao.insert_into_subreddits(comment.subreddit)
 
 
 def main():

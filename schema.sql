@@ -66,6 +66,14 @@ CREATE TABLE comment_phrase (
 	PRIMARY KEY (comment, phrase)
 );
 
+DROP TABLE IF EXISTS subreddits;
+CREATE TABLE subreddits (
+	id           INTEGER PRIMARY KEY,
+	id_b36       TEXT,
+	display_name TEXT,
+	subscribers  INTEGER
+);
+
 DROP VIEW IF EXISTS comments_basic;
 CREATE VIEW comments_basic AS
 SELECT id,author,subreddit,link_title,body,score,ups,downs,permalink
@@ -79,3 +87,38 @@ JOIN phrases ON comment_phrase.phrase == phrases.id
 JOIN comments ON comments.id == comment_phrase.comment
 WHERE total != 0
 ORDER BY comment
+
+DROP VIEW IF EXISTS phrases_by_subreddit;
+CREATE VIEW phrases_by_subreddit AS
+SELECT phrases.phrase, comments.subreddit, count(*) AS count
+FROM phrases
+JOIN comment_phrase ON phrases.id == comment_phrase.phrase
+JOIN comments ON comment_phrase.comment == comments.id
+GROUP BY phrases.phrase, comments.subreddit
+ORDER BY count DESC;
+
+DROP VIEW IF EXISTS phrase_counts;
+CREATE VIEW phrase_counts AS
+SELECT phrases.phrase, count(*) AS count
+FROM phrases
+JOIN comment_phrase ON phrases.id == comment_phrase.phrase
+GROUP BY phrases.phrase
+ORDER BY count DESC;
+
+DROP VIEW IF EXISTS subreddit_counts;
+CREATE VIEW subreddit_counts AS
+SELECT comments.subreddit, count(*) AS count
+FROM phrases
+JOIN comment_phrase ON phrases.id == comment_phrase.phrase
+JOIN comments ON comments.id == comment_phrase.comment
+GROUP BY comments.subreddit
+ORDER BY count DESC;
+
+DROP VIEW IF EXISTS user_counts;
+CREATE VIEW user_counts AS
+SELECT comments.author, count(*) AS count
+FROM phrases
+JOIN comment_phrase ON phrases.id == comment_phrase.phrase
+JOIN comments ON comments.id == comment_phrase.comment
+GROUP BY comments.author
+ORDER BY count DESC;
