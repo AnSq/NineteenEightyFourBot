@@ -1,5 +1,6 @@
 PRAGMA foreign_keys = ON;
 
+
 DROP TABLE IF EXISTS comments;
 CREATE TABLE comments (
 	id                     INTEGER PRIMARY KEY,
@@ -37,6 +38,7 @@ CREATE TABLE comments (
 	ups                    INTEGER
 );
 
+
 DROP TABLE IF EXISTS phrases;
 CREATE TABLE phrases (
 	id     INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -60,6 +62,7 @@ INSERT INTO phrases (phrase) VALUES ("Stasi");
 --It's like that gold feature, except it includes the middle of unrelated words!
 INSERT INTO phrases (phrase,report) VALUES ("AnSq", 0);
 
+
 DROP TABLE IF EXISTS comment_phrase;
 CREATE TABLE comment_phrase (
 	comment  INTEGER NOT NULL REFERENCES comments (id),
@@ -69,6 +72,7 @@ CREATE TABLE comment_phrase (
 	PRIMARY KEY (comment, phrase)
 );
 
+
 DROP TABLE IF EXISTS subreddits;
 CREATE TABLE subreddits (
 	display_name     TEXT PRIMARY KEY,
@@ -76,11 +80,13 @@ CREATE TABLE subreddits (
 	scanned_comments INTEGER DEFAULT 0
 );
 
+
 DROP VIEW IF EXISTS comments_basic;
 CREATE VIEW comments_basic AS
 SELECT id, author, subreddit, link_title, body, score, ups, downs, permalink
 FROM comments
 ORDER BY id DESC;
+
 
 DROP VIEW IF EXISTS comment_phrase_view;
 CREATE VIEW comment_phrase_view AS
@@ -91,33 +97,55 @@ JOIN comments ON comments.id == comment_phrase.comment
 WHERE total != 0
 ORDER BY comment DESC;
 
+
 DROP VIEW IF EXISTS phrases_by_subreddit;
 CREATE VIEW phrases_by_subreddit AS
-SELECT phrases.phrase, comments.subreddit, sum(unquoted+quoted) AS count, subscribers, CAST (sum(unquoted+quoted) AS FLOAT)/(CAST (subreddits.subscribers AS FLOAT)/100000) AS per_100000
-FROM phrases
-JOIN comment_phrase ON phrases.id == comment_phrase.phrase
-JOIN comments ON comment_phrase.comment == comments.id
-LEFT OUTER JOIN subreddits ON comments.subreddit == subreddits.display_name
-GROUP BY phrases.phrase, comments.subreddit
-ORDER BY count DESC;
+SELECT subreddit, phrase, comments, detections, per_detected_comment, subscribers, per_100000_subs, scanned_comments, per_1000_comments, activity_rate, 1.0*per_100000_subs/per_1000_comments AS k
+FROM
+(
+	SELECT 100000.0*detections/subscribers AS per_100000_subs, 1000.0*detections/scanned_comments AS per_1000_comments, 10000000000.0*scanned_comments/total_scanned/subscribers AS activity_rate, 1.0*detections/comments AS per_detected_comment, *
+	FROM
+	(
+		SELECT count(*) AS comments, sum(unquoted+quoted) AS detections, *
+		FROM phrases
+		JOIN comment_phrase ON phrases.id == comment_phrase.phrase
+		JOIN comments ON comments.id == comment_phrase.comment
+		LEFT OUTER JOIN subreddits ON comments.subreddit == subreddits.display_name
+		GROUP BY comments.subreddit, phrases.phrase
+	)
+	CROSS JOIN total_scanned
+)
+ORDER BY detections DESC;
+
 
 DROP VIEW IF EXISTS phrase_counts;
 CREATE VIEW phrase_counts AS
 SELECT phrases.phrase, sum(unquoted+quoted) AS count
 FROM phrases
-JOIN comment_phrase ON phrases.id == comment_phrase.phrase
+LEFT OUTER JOIN comment_phrase ON phrases.id == comment_phrase.phrase
 GROUP BY phrases.phrase
 ORDER BY count DESC;
 
-DROP VIEW IF EXISTS subreddit_counts;
-CREATE VIEW subreddit_counts AS
-SELECT comments.subreddit, sum(unquoted+quoted) AS count, subscribers, CAST (sum(unquoted+quoted) AS FLOAT)/(CAST (subreddits.subscribers AS FLOAT)/100000) AS per_100000
-FROM phrases
-JOIN comment_phrase ON phrases.id == comment_phrase.phrase
-JOIN comments ON comments.id == comment_phrase.comment
-LEFT OUTER JOIN subreddits ON comments.subreddit == subreddits.display_name
-GROUP BY comments.subreddit
-ORDER BY per_100000 DESC;
+
+DROP VIEW IF EXISTS subreddit_stats;
+CREATE VIEW subreddit_stats AS
+SELECT subreddit, comments, detections, per_detected_comment, subscribers, per_100000_subs, scanned_comments, per_1000_comments, activity_rate, 1.0*per_100000_subs/per_1000_comments AS k
+FROM
+(
+	SELECT 100000.0*detections/subscribers AS per_100000_subs, 1000.0*detections/scanned_comments AS per_1000_comments, 10000000000.0*scanned_comments/total_scanned/subscribers AS activity_rate, 1.0*detections/comments AS per_detected_comment, *
+	FROM
+	(
+		SELECT count(*) AS comments, sum(unquoted+quoted) AS detections, *
+		FROM phrases
+		JOIN comment_phrase ON phrases.id == comment_phrase.phrase
+		JOIN comments ON comments.id == comment_phrase.comment
+		LEFT OUTER JOIN subreddits ON comments.subreddit == subreddits.display_name
+		GROUP BY comments.subreddit
+	)
+	CROSS JOIN total_scanned
+)
+ORDER BY detections DESC;
+
 
 DROP VIEW IF EXISTS user_counts;
 CREATE VIEW user_counts AS
@@ -128,10 +156,12 @@ JOIN comments ON comments.id == comment_phrase.comment
 GROUP BY comments.author
 ORDER BY detections DESC;
 
+
 DROP VIEW IF EXISTS total_detections;
 CREATE VIEW total_detections AS
 SELECT sum(count) AS total_detections
 FROM phrase_counts;
+
 
 DROP VIEW IF EXISTS total_scanned;
 CREATE VIEW total_scanned AS

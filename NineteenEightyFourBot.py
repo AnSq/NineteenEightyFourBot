@@ -8,7 +8,7 @@ import calendar
 import sqlite3
 
 
-version = "0.7"
+version = "0.8.1"
 user_agent = "NineteenEightyFourBot v%s by /u/AnSq" % version
 
 
@@ -20,9 +20,7 @@ class DataAccessObject (object):
 	def __init__(self, dbname):
 		self.db = db = sqlite3.connect(dbname + ".sqlite")
 		self.phrase_table = dict(db.execute("SELECT lower(phrase), id FROM phrases").fetchall())
-
 		self._pending_requests = []
-		self._pending_data = []
 
 		self.db.execute("PRAGMA foreign_keys = ON")
 		self.db.commit()
@@ -64,7 +62,8 @@ class DataAccessObject (object):
 			c.subreddit_id,
 			c.ups
 		)
-		self.db.execute("INSERT OR REPLACE INTO comments (" +
+		self.db.execute(
+			"INSERT OR REPLACE INTO comments (" +
 				"id," +
 				"__hash__," +
 				"approved_by," +
@@ -112,25 +111,20 @@ class DataAccessObject (object):
 		self.db.commit()
 
 	def update_subreddit_comment_count(self, subreddit):
-		s = subreddit
-
 		#this happens so often I want to save some of it up so it doesn't constantly hit the database
-
-		self._pending_requests.append("INSERT OR IGNORE INTO subreddits (display_name) VALUES (?)")
-		self._pending_data.append((s.display_name,))
-
-		self._pending_requests.append("UPDATE subreddits SET scanned_comments = scanned_comments + 1 WHERE display_name == ?")
-		self._pending_data.append((s.display_name,))
+		s = subreddit
+		self._pending_requests.append(("INSERT OR IGNORE INTO subreddits (display_name) VALUES (?)", (s.display_name,)))
+		self._pending_requests.append(
+			("UPDATE subreddits SET scanned_comments = scanned_comments + 1 WHERE display_name == ?",
+			(s.display_name,))
+		)
 
 	def push_pending(self):
-		assert len(self._pending_requests) == len(self._pending_data)
-
+		#print len(self._pending_requests)
 		for i in range(0, len(self._pending_requests)):
-			self.db.execute(self._pending_requests[i], self._pending_data[i])
+			self.db.execute(self._pending_requests[i][0], self._pending_requests[i][1])
 		self.db.commit()
-
 		self._pending_requests = []
-		self._pending_data = []
 
 	def update_subreddit_subscribers(self, subreddit):
 		"""use with caution, this makes a network call for unfetched subreddits"""
@@ -143,6 +137,9 @@ class Detector (object):
 	def __init__(self, phrase):
 		self.phrase = phrase.lower()
 
+	def filter(self, line, index):
+		return True
+
 	def detect(self, comment):
 		count = {False: 0, True: 0} # key is if it's quoted
 		for line in comment.body.lower().splitlines():
@@ -153,7 +150,8 @@ class Detector (object):
 				if index == -1:
 					break
 				else:
-					count[quoted] += 1
+					if self.filter(line, index):
+						count[quoted] += 1
 					start = index + 1
 		return count
 
@@ -175,29 +173,24 @@ class FreeYearDetector (Detector):
 		str = pre + " " + post
 		return "1"*length in "".join(["1" if c.isdigit() else "0" for c in str])
 
-	def detect(self, comment):
-		count = {False: 0, True: 0} # key is if it's quoted
-		for line in comment.body.lower().splitlines():
-			quoted = line.strip()[:4] == "&gt;"
-			start = 0
-			while start < len(line) and start != -1:
-				index = line.find(self.phrase, start)
-				if index == -1:
-					break
+	def filter(self, line, index):
+		#search for months
+		start = max(index - self.search_len, 0)
+		end = index + len(self.phrase) + self.search_len
+		found_month = any([m in line[start:end] for m in self.months])
 
-				#search for months
-				start = max(index - self.search_len, 0)
-				end = index + len(self.phrase) + self.search_len
-				found_month = any([m in line[start:end] for m in self.months])
+		#search for numbers
+		found_year = self.search_numbers(line, index, self.search_len, 4)
+		found_number = self.search_numbers(line, index, 2, 1)
 
-				#search for numbers
-				found_year = self.search_numbers(line, index, self.search_len, 4)
-				found_number = self.search_numbers(line, index, 2, 1)
+		return not found_month and not found_year and not found_number
 
-				if not found_month and not found_year and not found_number:
-					count[quoted] += 1
-				start = index + 1
-		return count
+
+class WordDetector (Detector):
+	"""detects a word only when it's surrounded by non-word chars"""
+
+	def filter(self, line, index):
+		return not line[index - 1].isalpha() and not line[index + len(self.phrase)].isalpha()
 
 
 class DetectorMaker (object):
@@ -206,8 +199,10 @@ class DetectorMaker (object):
 
 	def get_detector(self, phrase):
 		# add other detectors here
-		if (phrase == "1984"):
+		if phrase == "1984":
 			return FreeYearDetector(phrase)
+		elif phrase == "stasi" or phrase == "police state":
+			return WordDetector(phrase)
 		else:
 			return Detector(phrase)
 
@@ -239,12 +234,12 @@ class CommentHandler (object):
 		calls = self.times_called % 1000 == 0
 		t = time.time() - self.time_pushed
 		if calls or t > 10:
-			print "    push_pending",
-			if calls:
-				print "calls (%4f time)" % t,
-			if t > 10:
-				print "time (%d calls)" % (self.times_called),
-			print
+			#print "    push_pending",
+			#if calls:
+			#	print "calls (%4f time)" % t,
+			#if t > 10:
+			#	print "time (%d calls)" % (self.times_called),
+			#print
 			self.dao.push_pending()
 			self.time_pushed = time.time()
 
