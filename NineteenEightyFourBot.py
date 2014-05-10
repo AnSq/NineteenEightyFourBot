@@ -8,7 +8,7 @@ import calendar
 import sqlite3
 
 
-version = "0.8.2"
+version = "0.8.3"
 user_agent = "NineteenEightyFourBot v%s by /u/AnSq" % version
 
 
@@ -203,7 +203,9 @@ class WordDetector (Detector):
 	"""detects a word only when it's surrounded by non-word chars"""
 
 	def filter(self, line, index):
-		return not line[index - 1].isalpha() and not line[index + len(self.phrase)].isalpha()
+		pre = index - 1
+		post = index + len(self.phrase)
+		return (pre < 0 or not line[pre].isalpha()) and (post >= len(line) or not line[post].isalpha())
 
 
 class DetectorMaker (object):
@@ -214,7 +216,9 @@ class DetectorMaker (object):
 		# add other detectors here
 		if phrase == "1984":
 			return FreeYearDetector(phrase)
-		elif phrase == "stasi" or phrase == "police state":
+		elif phrase == "stasi" \
+		or   phrase == "police state" \
+		or   phrase == "illuminati":
 			return WordDetector(phrase)
 		else:
 			return Detector(phrase)
@@ -267,14 +271,14 @@ class CommentHandler (object):
 
 def main():
 	try:
+		handler = CommentHandler(DataAccessObject("test"))
+
 		print user_agent
 		print time.asctime(time.localtime())
 		reddit = praw.Reddit(user_agent=user_agent)
 		print "Logging in...",
 		reddit.login()
 		print reddit.user.name
-
-		handler = CommentHandler(DataAccessObject("test"))
 
 		i = 0
 		stream = praw.helpers.comment_stream(reddit, "all", verbosity=3)
