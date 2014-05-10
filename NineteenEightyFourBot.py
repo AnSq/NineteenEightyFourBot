@@ -8,7 +8,7 @@ import calendar
 import sqlite3
 
 
-version = "0.8.1"
+version = "0.8.2"
 user_agent = "NineteenEightyFourBot v%s by /u/AnSq" % version
 
 
@@ -23,7 +23,20 @@ class DataAccessObject (object):
 		self._pending_requests = []
 
 		self.db.execute("PRAGMA foreign_keys = ON")
-		self.db.commit()
+		self.commit()
+
+	def close(self):
+		self.push_pending()
+		self.db.close()
+
+	def commit(self):
+		while True:
+			try:
+				self.db.commit()
+				break
+			except Exception as e:
+				print "%s: %s" % (tyep(e).__name__, e)
+				time.sleep(0.1)
 
 	def insert_into_comments(self, comment):
 		c = comment
@@ -100,7 +113,7 @@ class DataAccessObject (object):
 			") VALUES (" + "?," * 32 + "?);",
 			data
 		)
-		self.db.commit()
+		self.commit()
 
 	def insert_comment_counts(self, c_id, counts):
 		for phrase in counts:
@@ -108,7 +121,7 @@ class DataAccessObject (object):
 			if count[False] + count[True] > 0:
 				data = (c_id, self.phrase_table[phrase], count[False], count[True])
 				self.db.execute("INSERT OR REPLACE INTO comment_phrase (comment, phrase, unquoted, quoted) VALUES (?,?,?,?)", data)
-		self.db.commit()
+		self.commit()
 
 	def update_subreddit_comment_count(self, subreddit):
 		#this happens so often I want to save some of it up so it doesn't constantly hit the database
@@ -123,14 +136,14 @@ class DataAccessObject (object):
 		#print len(self._pending_requests)
 		for i in range(0, len(self._pending_requests)):
 			self.db.execute(self._pending_requests[i][0], self._pending_requests[i][1])
-		self.db.commit()
+		self.commit()
 		self._pending_requests = []
 
 	def update_subreddit_subscribers(self, subreddit):
 		"""use with caution, this makes a network call for unfetched subreddits"""
 		s = subreddit
 		self.db.execute("UPDATE subreddits SET subscribers = ? WHERE display_name == ?", (s.subscribers, s.display_name))
-		self.db.commit()
+		self.commit()
 
 
 class Detector (object):
@@ -220,6 +233,9 @@ class CommentHandler (object):
 		self.times_called = 0
 		self.time_pushed = time.time()
 
+	def close(self):
+		self.dao.close()
+
 	def any(self, counts):
 		"""Flattens the doubly-nested dict of counts into a
 		single bool representing if any at all are > 0.
@@ -231,15 +247,7 @@ class CommentHandler (object):
 
 		self.dao.update_subreddit_comment_count(comment.subreddit)
 
-		calls = self.times_called % 1000 == 0
-		t = time.time() - self.time_pushed
-		if calls or t > 10:
-			#print "    push_pending",
-			#if calls:
-			#	print "calls (%4f time)" % t,
-			#if t > 10:
-			#	print "time (%d calls)" % (self.times_called),
-			#print
+		if self.times_called % 1000 == 0 or time.time() - self.time_pushed > 10:
 			self.dao.push_pending()
 			self.time_pushed = time.time()
 
@@ -258,22 +266,43 @@ class CommentHandler (object):
 
 
 def main():
-	print user_agent
-	print time.asctime(time.localtime())
-	reddit = praw.Reddit(user_agent=user_agent)
-	print "Logging in...",
-	reddit.login()
-	print reddit.user.name
+	try:
+		print user_agent
+		print time.asctime(time.localtime())
+		reddit = praw.Reddit(user_agent=user_agent)
+		print "Logging in...",
+		reddit.login()
+		print reddit.user.name
 
-	handler = CommentHandler(DataAccessObject("test"))
+		handler = CommentHandler(DataAccessObject("test"))
 
-	i = 0
-	stream = praw.helpers.comment_stream(reddit, "all", verbosity=3)
-	for comment in stream:
-		#start = time.time()
-		handler.handle(comment)
-		#print round(time.time()-start,4),
-		i += 1
+		i = 0
+		stream = praw.helpers.comment_stream(reddit, "all", verbosity=3)
+		#for comment in stream:
+		while True:
+			comment = None
+			while True:
+				try:
+					comment = stream.next()
+					break
+				except StopIteration as e:
+					print "StopIteration"
+					time.sleep(0.1)
+					#stream = praw.helpers.comment_stream(reddit, "all", verbosity=3)
+				except Exception as e:
+					print "\r%s: %s" % (type(e).__name__, e),
+					time.sleep(0.1)
+			#start = time.time()
+			try:
+				handler.handle(comment)
+			except Exception as e:
+				print "%s: %s" % (type(e).__name__, e)
+			#print round(time.time()-start,4),
+			i += 1
+	except KeyboardInterrupt as e:
+		print "\nclosing"
+		handler.close()
+		exit()
 
 
 if __name__ == "__main__":
