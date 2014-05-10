@@ -6,9 +6,10 @@ import praw.helpers
 import time
 import calendar
 import sqlite3
+import sys
 
 
-version = "0.8.3"
+version = "0.8.4"
 user_agent = "NineteenEightyFourBot v%s by /u/AnSq" % version
 
 
@@ -269,13 +270,22 @@ class CommentHandler (object):
 			self.dao.update_subreddit_subscribers(comment.subreddit)
 
 
+def get_praw_handler():
+	handler = None
+	if len(sys.argv) > 1 and sys.argv[1] == "-m":
+		handler = praw.handlers.MultiprocessHandler()
+	else:
+		handler = praw.handlers.DefaultHandler()
+	return handler
+
+
 def main():
 	try:
 		handler = CommentHandler(DataAccessObject("test"))
 
 		print user_agent
 		print time.asctime(time.localtime())
-		reddit = praw.Reddit(user_agent=user_agent)
+		reddit = praw.Reddit(user_agent=user_agent, handler=get_praw_handler())
 		print "Logging in...",
 		reddit.login()
 		print reddit.user.name
