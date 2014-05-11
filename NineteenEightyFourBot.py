@@ -9,12 +9,20 @@ import sqlite3
 import sys
 
 
-version = "0.8.4"
+version = "0.8.5"
 user_agent = "NineteenEightyFourBot v%s by /u/AnSq" % version
 
 
 def thing_id(id):
 	return praw.helpers.convert_id36_to_numeric_id(id)
+
+
+def log_exception(e, location=""):
+	s = "%s: %s: %s: %s" % (time.asctime(time.localtime()), location, tyep(e).__name__, e)
+	print s
+	f = open("exceptions.log", "a")
+	f.write(s + "\n")
+	f.close()
 
 
 class DataAccessObject (object):
@@ -36,7 +44,7 @@ class DataAccessObject (object):
 				self.db.commit()
 				break
 			except Exception as e:
-				print "%s: %s" % (tyep(e).__name__, e)
+				log_exception(e, "DataAccessObject.commit")
 				time.sleep(0.1)
 
 	def insert_into_comments(self, comment):
@@ -300,17 +308,17 @@ def main():
 					comment = stream.next()
 					break
 				except StopIteration as e:
-					print "StopIteration"
+					log_exception(e, "main (inner 1)")
 					time.sleep(0.1)
-					#stream = praw.helpers.comment_stream(reddit, "all", verbosity=3)
+					stream = praw.helpers.comment_stream(reddit, "all", verbosity=3)
 				except Exception as e:
-					print "\r%s: %s" % (type(e).__name__, e),
+					log_exception(e, "main (inner 2)")
 					time.sleep(0.1)
 			#start = time.time()
 			try:
 				handler.handle(comment)
 			except Exception as e:
-				print "%s: %s" % (type(e).__name__, e)
+				log_exception(e, "main (outer)")
 			#print round(time.time()-start,4),
 			i += 1
 	except KeyboardInterrupt as e:

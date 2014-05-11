@@ -157,13 +157,16 @@ GROUP BY comments.author
 ORDER BY detections DESC;
 
 
-DROP VIEW IF EXISTS total_detections;
-CREATE VIEW total_detections AS
-SELECT sum(count) AS total_detections
-FROM phrase_counts;
-
-
-DROP VIEW IF EXISTS total_scanned;
-CREATE VIEW total_scanned AS
-SELECT sum(scanned_comments) AS total_scanned
-FROM subreddits;
+DROP VIEW IF EXISTS stats;
+CREATE VIEW stats AS
+SELECT 'total_comments' AS k, count(*) AS v
+FROM comments
+UNION
+SELECT 'total_detections' AS k, sum(count) AS v
+FROM phrase_counts
+UNION
+SELECT 'total_scanned' AS k, sum(scanned_comments) AS v
+FROM subreddits
+UNION
+SELECT 'total_users' AS k, count(*) AS v
+FROM user_counts;
