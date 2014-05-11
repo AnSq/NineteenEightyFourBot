@@ -18,7 +18,7 @@ def thing_id(id):
 
 
 def log_exception(e, location=""):
-	s = "%s: %s: %s: %s" % (time.asctime(time.localtime()), location, tyep(e).__name__, e)
+	s = "%s: %s: %s: %s" % (time.asctime(time.localtime()), location, type(e).__name__, e)
 	print s
 	f = open("exceptions.log", "a")
 	f.write(s + "\n")
