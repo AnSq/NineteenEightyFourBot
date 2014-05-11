@@ -113,7 +113,11 @@ FROM
 		LEFT OUTER JOIN subreddits ON comments.subreddit == subreddits.display_name
 		GROUP BY comments.subreddit, phrases.phrase
 	)
-	CROSS JOIN total_scanned
+	CROSS JOIN (
+		SELECT v AS total_scanned
+		FROM stats
+		WHERE k == 'total_scanned'
+	)
 )
 ORDER BY detections DESC;
 
@@ -142,7 +146,11 @@ FROM
 		LEFT OUTER JOIN subreddits ON comments.subreddit == subreddits.display_name
 		GROUP BY comments.subreddit
 	)
-	CROSS JOIN total_scanned
+	CROSS JOIN (
+		SELECT v AS total_scanned
+		FROM stats
+		WHERE k == 'total_scanned'
+	)
 )
 ORDER BY detections DESC;
 
