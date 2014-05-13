@@ -1,6 +1,9 @@
 PRAGMA foreign_keys = ON;
 
 
+-- TABLES ----------------------------------------------------------------------
+
+
 DROP TABLE IF EXISTS comments;
 CREATE TABLE comments (
 	id                     INTEGER PRIMARY KEY,
@@ -81,6 +84,9 @@ CREATE TABLE subreddits (
 );
 
 
+-- VIEWS -----------------------------------------------------------------------
+
+
 DROP VIEW IF EXISTS comments_basic;
 CREATE VIEW comments_basic AS
 SELECT id, author, subreddit, link_title, body, score, ups, downs, permalink
@@ -100,7 +106,7 @@ ORDER BY comment DESC;
 
 DROP VIEW IF EXISTS phrases_by_subreddit;
 CREATE VIEW phrases_by_subreddit AS
-SELECT subreddit, phrase, comments, detections, per_detected_comment, subscribers, per_100000_subs, scanned_comments, per_1000_comments, activity_rate, 1.0*per_100000_subs/per_1000_comments AS k
+SELECT subreddit, phrase, comments, detections, per_detected_comment, subscribers, per_100000_subs, scanned_comments, per_1000_comments, activity_rate
 FROM
 (
 	SELECT 100000.0*detections/subscribers AS per_100000_subs, 1000.0*detections/scanned_comments AS per_1000_comments, 10000000000.0*scanned_comments/total_scanned/subscribers AS activity_rate, 1.0*detections/comments AS per_detected_comment, *
@@ -133,7 +139,7 @@ ORDER BY count DESC;
 
 DROP VIEW IF EXISTS subreddit_stats;
 CREATE VIEW subreddit_stats AS
-SELECT subreddit, comments, detections, per_detected_comment, subscribers, per_100000_subs, scanned_comments, per_1000_comments, activity_rate, 1.0*per_100000_subs/per_1000_comments AS k
+SELECT subreddit, comments, detections, per_detected_comment, subscribers, per_100000_subs, scanned_comments, per_1000_comments, activity_rate
 FROM
 (
 	SELECT 100000.0*detections/subscribers AS per_100000_subs, 1000.0*detections/scanned_comments AS per_1000_comments, 10000000000.0*scanned_comments/total_scanned/subscribers AS activity_rate, 1.0*detections/comments AS per_detected_comment, *
